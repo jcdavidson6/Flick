@@ -224,8 +224,8 @@ function App() {
   const currentSession = currentSessionCode ? sessions[currentSessionCode] : null
   const currentParticipant = currentSession && currentParticipantId ? currentSession.participants[currentParticipantId] : undefined
 
-  const sessionMutualMatches = useMemo(() => {
-    const participantEntries = currentSession ? Object.values(currentSession.participants) : []
+  const getSessionMatches = (session: SessionRecord | null) => {
+    const participantEntries = session ? Object.values(session.participants) : []
     if (participantEntries.length < 2) return []
 
     const sets = participantEntries.map((participant) => new Set(participant.likes))
@@ -233,7 +233,23 @@ function App() {
     return common
       .map((id) => movieCatalog.find((movie) => movie.id === id))
       .filter((movie): movie is CatalogMovie => Boolean(movie))
-  }, [currentSession])
+  }
+
+  const sessionMutualMatches = useMemo(() => getSessionMatches(currentSession), [currentSession])
+
+  const allMutualMatches = useMemo(() => {
+    const matchesById = new Map<string, CatalogMovie>()
+
+    Object.values(sessions).forEach((session) => {
+      const participants = Object.values(session.participants)
+      const currentUser = session.participants[currentParticipantId]
+      if (!currentUser || participants.length < 2 || participants.some((participant) => !participant.done)) return
+
+      getSessionMatches(session).forEach((movie) => matchesById.set(movie.id, movie))
+    })
+
+    return [...matchesById.values()]
+  }, [currentParticipantId, sessions])
 
   const startSession = () => {
     const name = sessionInputName.trim() || 'Guest'
@@ -509,7 +525,7 @@ function App() {
       <div className="status-bar"><div className="status-icons"><span className="status-pill" /></div></div>
       <div className="panel watchlist-panel">
         <h1>Watchlist</h1>
-        <div className="pill-count-box">{watchlistTab === 'solo' ? likedMovies.length : sessionMutualMatches.length} Saved</div>
+        <div className="pill-count-box">{watchlistTab === 'solo' ? likedMovies.length : allMutualMatches.length} Saved</div>
 
         <div className="segment-row">
           <button type="button" className={`segment ${watchlistTab === 'solo' ? 'active' : ''}`} onClick={() => setWatchlistTab('solo')}>Solo Likes</button>
@@ -532,10 +548,10 @@ function App() {
               ))
             )
           ) : (
-            sessionMutualMatches.length === 0 ? (
+            allMutualMatches.length === 0 ? (
               <div className="empty-state">No mutual matches yet.</div>
             ) : (
-              sessionMutualMatches.map((movie) => (
+              allMutualMatches.map((movie) => (
                 <div className="watchlist-item" key={movie.id}>
                   <div className="watchlist-art" style={{ background: movie.gradient }}>{movie.emoji}</div>
                   <div>
