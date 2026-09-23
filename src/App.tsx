@@ -53,49 +53,59 @@ function getStored<T>(key: string, fallback: T): T {
   }
 }
 
+function getUserStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = sessionStorage.getItem(key)
+    if (!raw) return fallback
+    return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
+}
+
 function App() {
-  const [hasStarted, setHasStarted] = useState<boolean>(() => getStored(storageKeys.hasStarted, false))
-  const [selectedGenres, setSelectedGenres] = useState<string[]>(() => getStored(storageKeys.selectedGenres, []))
-  const [onboardingComplete, setOnboardingComplete] = useState<boolean>(() => getStored(storageKeys.onboardingComplete, false))
+  const [hasStarted, setHasStarted] = useState<boolean>(() => getUserStored(storageKeys.hasStarted, false))
+  const [selectedGenres, setSelectedGenres] = useState<string[]>(() => getUserStored(storageKeys.selectedGenres, []))
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean>(() => getUserStored(storageKeys.onboardingComplete, false))
   const [activeTab, setActiveTab] = useState<Tab>('discover')
   const [watchlistTab, setWatchlistTab] = useState<WatchlistTab>('solo')
   const [deck, setDeck] = useState<CatalogMovie[]>(() => buildDeck(
-    getStored(storageKeys.selectedGenres, []),
+    getUserStored(storageKeys.selectedGenres, []),
     12,
-    [...getStored<CatalogMovie[]>(storageKeys.likedMovies, []), ...getStored<string[]>(storageKeys.dislikedIds, [])].map((item) => typeof item === 'string' ? item : item.id),
+    [...getUserStored<CatalogMovie[]>(storageKeys.likedMovies, []), ...getUserStored<string[]>(storageKeys.dislikedIds, [])].map((item) => typeof item === 'string' ? item : item.id),
   ))
   const [currentIndex, setCurrentIndex] = useState(0)
   const [showInfo, setShowInfo] = useState(false)
   const [tasteScreen, setTasteScreen] = useState(false)
   const [swipesInBatch, setSwipesInBatch] = useState(0)
-  const [likedMovies, setLikedMovies] = useState<CatalogMovie[]>(() => getStored(storageKeys.likedMovies, []))
-  const [dislikedIds, setDislikedIds] = useState<string[]>(() => getStored(storageKeys.dislikedIds, []))
+  const [likedMovies, setLikedMovies] = useState<CatalogMovie[]>(() => getUserStored(storageKeys.likedMovies, []))
+  const [dislikedIds, setDislikedIds] = useState<string[]>(() => getUserStored(storageKeys.dislikedIds, []))
   const [sessionInputName, setSessionInputName] = useState('')
   const [joinCode, setJoinCode] = useState('')
   const [joinName, setJoinName] = useState('')
   const [sessionScreen, setSessionScreen] = useState<SessionScreen>('home')
-  const [currentSessionCode, setCurrentSessionCode] = useState<string | null>(() => getStored(storageKeys.currentSession, null))
-  const [currentParticipantId, setCurrentParticipantId] = useState<string>(() => getStored(storageKeys.currentParticipant, 'guest'))
+  const [currentSessionCode, setCurrentSessionCode] = useState<string | null>(() => getUserStored(storageKeys.currentSession, null))
+  const [currentParticipantId, setCurrentParticipantId] = useState<string>(() => getUserStored(storageKeys.currentParticipant, 'guest'))
   const [sessions, setSessions] = useState<Record<string, SessionRecord>>(() => getStored(storageKeys.sessions, {}))
 
   useEffect(() => {
-    localStorage.setItem(storageKeys.hasStarted, JSON.stringify(hasStarted))
+    sessionStorage.setItem(storageKeys.hasStarted, JSON.stringify(hasStarted))
   }, [hasStarted])
 
   useEffect(() => {
-    localStorage.setItem(storageKeys.selectedGenres, JSON.stringify(selectedGenres))
+    sessionStorage.setItem(storageKeys.selectedGenres, JSON.stringify(selectedGenres))
   }, [selectedGenres])
 
   useEffect(() => {
-    localStorage.setItem(storageKeys.onboardingComplete, JSON.stringify(onboardingComplete))
+    sessionStorage.setItem(storageKeys.onboardingComplete, JSON.stringify(onboardingComplete))
   }, [onboardingComplete])
 
   useEffect(() => {
-    localStorage.setItem(storageKeys.likedMovies, JSON.stringify(likedMovies))
+    sessionStorage.setItem(storageKeys.likedMovies, JSON.stringify(likedMovies))
   }, [likedMovies])
 
   useEffect(() => {
-    localStorage.setItem(storageKeys.dislikedIds, JSON.stringify(dislikedIds))
+    sessionStorage.setItem(storageKeys.dislikedIds, JSON.stringify(dislikedIds))
   }, [dislikedIds])
 
   useEffect(() => {
@@ -103,12 +113,12 @@ function App() {
   }, [sessions])
 
   useEffect(() => {
-    if (currentSessionCode) localStorage.setItem(storageKeys.currentSession, JSON.stringify(currentSessionCode))
-    else localStorage.removeItem(storageKeys.currentSession)
+    if (currentSessionCode) sessionStorage.setItem(storageKeys.currentSession, JSON.stringify(currentSessionCode))
+    else sessionStorage.removeItem(storageKeys.currentSession)
   }, [currentSessionCode])
 
   useEffect(() => {
-    localStorage.setItem(storageKeys.currentParticipant, JSON.stringify(currentParticipantId))
+    sessionStorage.setItem(storageKeys.currentParticipant, JSON.stringify(currentParticipantId))
   }, [currentParticipantId])
 
   useEffect(() => {
@@ -282,7 +292,20 @@ function App() {
   }
 
   const updateCurrentSession = (nextSession: SessionRecord) => {
-    setSessions((current) => ({ ...current, [nextSession.code]: nextSession }))
+    const storedSessions = getStored<Record<string, SessionRecord>>(storageKeys.sessions, {})
+    const storedSession = storedSessions[nextSession.code]
+    const mergedSession: SessionRecord = storedSession
+      ? {
+          ...storedSession,
+          deck: nextSession.deck,
+          participants: { ...storedSession.participants, ...nextSession.participants },
+        }
+      : nextSession
+    const mergedSessions = { ...storedSessions, [nextSession.code]: mergedSession }
+
+    localStorage.setItem(storageKeys.sessions, JSON.stringify(mergedSessions))
+    setSessions((current) => ({ ...current, [nextSession.code]: mergedSession }))
+    return mergedSession
   }
 
   const sessionCard = currentSession && currentParticipant ? currentSession.deck[currentParticipant.deckIndex] : null
@@ -309,9 +332,9 @@ function App() {
       },
     }
 
-    updateCurrentSession(nextSession)
+    const persistedSession = updateCurrentSession(nextSession)
 
-    const doneCount = Object.values(nextSession.participants).filter((participant) => participant.done).length
+    const doneCount = Object.values(persistedSession.participants).filter((participant) => participant.done).length
     setSessionScreen(doneCount >= 2 ? 'results' : 'waiting')
   }
 
@@ -325,11 +348,13 @@ function App() {
     setCurrentIndex(0)
     setTasteScreen(false)
     setSwipesInBatch(0)
-    localStorage.removeItem(storageKeys.selectedGenres)
-    localStorage.removeItem(storageKeys.hasStarted)
-    localStorage.removeItem(storageKeys.onboardingComplete)
-    localStorage.removeItem(storageKeys.likedMovies)
-    localStorage.removeItem(storageKeys.dislikedIds)
+    sessionStorage.removeItem(storageKeys.selectedGenres)
+    sessionStorage.removeItem(storageKeys.hasStarted)
+    sessionStorage.removeItem(storageKeys.onboardingComplete)
+    sessionStorage.removeItem(storageKeys.likedMovies)
+    sessionStorage.removeItem(storageKeys.dislikedIds)
+    sessionStorage.removeItem(storageKeys.currentSession)
+    sessionStorage.removeItem(storageKeys.currentParticipant)
   }
 
   const renderCover = () => (
