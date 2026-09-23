@@ -33,14 +33,14 @@ type SessionRecord = {
 const GENRES = [...genrePriority] as const
 
 const storageKeys = {
-  hasStarted: 'reelmatch:hasStarted',
-  selectedGenres: 'reelmatch:selectedGenres',
-  onboardingComplete: 'reelmatch:onboardingComplete',
-  likedMovies: 'reelmatch:likedMovies',
-  dislikedIds: 'reelmatch:dislikedIds',
-  sessions: 'reelmatch:sessions',
-  currentSession: 'reelmatch:currentSession',
-  currentParticipant: 'reelmatch:currentParticipant',
+  hasStarted: 'flick:hasStarted',
+  selectedGenres: 'flick:selectedGenres',
+  onboardingComplete: 'flick:onboardingComplete',
+  likedMovies: 'flick:likedMovies',
+  dislikedIds: 'flick:dislikedIds',
+  sessions: 'flick:sessions',
+  currentSession: 'flick:currentSession',
+  currentParticipant: 'flick:currentParticipant',
 }
 
 function getStored<T>(key: string, fallback: T): T {

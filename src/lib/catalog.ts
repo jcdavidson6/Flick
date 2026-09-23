@@ -114,7 +114,7 @@ export const buildDeck = (selectedGenres: string[], count = 12, excludedIds: str
   const candidatePool = shuffle([...filteredPool, ...fallbackPool])
   const deck = candidatePool.slice(0, count)
 
-  console.debug('[Reelmatch] new deck', {
+  console.debug('[Flick] new deck', {
     filteredPoolSize: filteredPool.length,
     excludedCount: excluded.size,
     titles: deck.map((movie) => movie.title),
