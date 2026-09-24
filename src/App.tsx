@@ -1,792 +1,189 @@
-import { type Dispatch, type SetStateAction, useEffect, useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { Bookmark, Check, Heart, Info, Sparkles, Star, UserRound, Users, X } from 'lucide-react'
 import './App.css'
-import {
-  buildDeck,
-  genreMoodImages,
-  genrePriority,
-  getRecommendedTitles,
-  movieCatalog,
-  type CatalogMovie,
-} from './lib/catalog'
 
-type Tab = 'discover' | 'watchlist' | 'sessions' | 'profile'
-type WatchlistTab = 'solo' | 'mutual'
-type SessionScreen = 'home' | 'swipe' | 'waiting' | 'results'
+const featureList = [
+  'Be Part of a Community',
+  'Track Your Watchlist',
+  'Personalized Recommendations',
+  'Connect with Your Friends',
+]
 
-type SessionParticipant = {
-  id: string
-  name: string
-  likes: string[]
-  dislikes: string[]
-  done: boolean
-  deckIndex: number
-}
+const galleryImages = [
+  'https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1524985069026-dd778a71c7b4?auto=format&fit=crop&w=900&q=80',
+  'https://images.unsplash.com/photo-1493246507139-91e8fad9978e?auto=format&fit=crop&w=900&q=80',
+]
 
-type SessionRecord = {
-  code: string
-  deck: CatalogMovie[]
-  participants: Record<string, SessionParticipant>
-}
-
-const GENRES = [...genrePriority] as const
-
-const storageKeys = {
-  hasStarted: 'flick:hasStarted',
-  selectedGenres: 'flick:selectedGenres',
-  onboardingComplete: 'flick:onboardingComplete',
-  likedMovies: 'flick:likedMovies',
-  dislikedIds: 'flick:dislikedIds',
-  sessions: 'flick:sessions',
-  currentSession: 'flick:currentSession',
-  currentParticipant: 'flick:currentParticipant',
-}
-
-function getStored<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return fallback
-    return JSON.parse(raw) as T
-  } catch {
-    return fallback
-  }
-}
-
-function getUserStored<T>(key: string, fallback: T): T {
-  try {
-    const raw = sessionStorage.getItem(key)
-    if (!raw) return fallback
-    return JSON.parse(raw) as T
-  } catch {
-    return fallback
-  }
-}
+const testimonials = [
+  {
+    quote:
+      'Finally, an easy way to decide what to watch. I love the swipe feature because it’s so much easier than scrolling through Netflix for 30 minutes. The recommendations actually feel tailored to my taste.',
+    author: 'Lindsey Sou',
+    avatar:
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
+  },
+  {
+    quote:
+      'Movie night just got so much easier. The session feature is my favorite part. My friends and I can see which movies we both like without having to send each other a million titles. It makes picking a movie way less complicated.',
+    author: 'Ada Kivanc',
+    avatar:
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
+  },
+  {
+    quote:
+      'Simple idea, really fun to use. Flick makes discovering movies feel like a game. I especially like that I can build up my preferences over time and get recommendations based on what I actually enjoy.',
+    author: 'Adrian Blanco',
+    avatar:
+      'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=200&q=80',
+  },
+]
 
 function App() {
-  const [hasStarted, setHasStarted] = useState<boolean>(() => getUserStored(storageKeys.hasStarted, false))
-  const [selectedGenres, setSelectedGenres] = useState<string[]>(() => getUserStored(storageKeys.selectedGenres, []))
-  const [onboardingComplete, setOnboardingComplete] = useState<boolean>(() => getUserStored(storageKeys.onboardingComplete, false))
-  const [activeTab, setActiveTab] = useState<Tab>('discover')
-  const [watchlistTab, setWatchlistTab] = useState<WatchlistTab>('solo')
-  const [deck, setDeck] = useState<CatalogMovie[]>(() => buildDeck(
-    getUserStored(storageKeys.selectedGenres, []),
-    12,
-    [...getUserStored<CatalogMovie[]>(storageKeys.likedMovies, []), ...getUserStored<string[]>(storageKeys.dislikedIds, [])].map((item) => typeof item === 'string' ? item : item.id),
-  ))
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [showInfo, setShowInfo] = useState(false)
-  const [tasteScreen, setTasteScreen] = useState(false)
-  const [swipesInBatch, setSwipesInBatch] = useState(0)
-  const [likedMovies, setLikedMovies] = useState<CatalogMovie[]>(() => getUserStored(storageKeys.likedMovies, []))
-  const [dislikedIds, setDislikedIds] = useState<string[]>(() => getUserStored(storageKeys.dislikedIds, []))
-  const [sessionInputName, setSessionInputName] = useState('')
-  const [joinCode, setJoinCode] = useState('')
-  const [joinName, setJoinName] = useState('')
-  const [sessionScreen, setSessionScreen] = useState<SessionScreen>('home')
-  const [currentSessionCode, setCurrentSessionCode] = useState<string | null>(() => getUserStored(storageKeys.currentSession, null))
-  const [currentParticipantId, setCurrentParticipantId] = useState<string>(() => getUserStored(storageKeys.currentParticipant, 'guest'))
-  const [sessions, setSessions] = useState<Record<string, SessionRecord>>(() => getStored(storageKeys.sessions, {}))
-
-  useEffect(() => {
-    sessionStorage.setItem(storageKeys.hasStarted, JSON.stringify(hasStarted))
-  }, [hasStarted])
-
-  useEffect(() => {
-    sessionStorage.setItem(storageKeys.selectedGenres, JSON.stringify(selectedGenres))
-  }, [selectedGenres])
-
-  useEffect(() => {
-    sessionStorage.setItem(storageKeys.onboardingComplete, JSON.stringify(onboardingComplete))
-  }, [onboardingComplete])
-
-  useEffect(() => {
-    sessionStorage.setItem(storageKeys.likedMovies, JSON.stringify(likedMovies))
-  }, [likedMovies])
-
-  useEffect(() => {
-    sessionStorage.setItem(storageKeys.dislikedIds, JSON.stringify(dislikedIds))
-  }, [dislikedIds])
-
-  useEffect(() => {
-    localStorage.setItem(storageKeys.sessions, JSON.stringify(sessions))
-  }, [sessions])
-
-  useEffect(() => {
-    if (currentSessionCode) sessionStorage.setItem(storageKeys.currentSession, JSON.stringify(currentSessionCode))
-    else sessionStorage.removeItem(storageKeys.currentSession)
-  }, [currentSessionCode])
-
-  useEffect(() => {
-    sessionStorage.setItem(storageKeys.currentParticipant, JSON.stringify(currentParticipantId))
-  }, [currentParticipantId])
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === storageKeys.sessions) {
-        setSessions(getStored(storageKeys.sessions, {}))
-      }
-    }
-
-    window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
-  }, [])
-
-  useEffect(() => {
-    const nextDeck = buildDeck(selectedGenres, 12, [...likedMovies.map((movie) => movie.id), ...dislikedIds])
-    setDeck(nextDeck)
-    setCurrentIndex(0)
-    setShowInfo(false)
-    setSwipesInBatch(0)
-  }, [selectedGenres])
-
-  const currentMovie = deck[currentIndex] ?? movieCatalog[0]
-
-  const affinityByGenre = useMemo(() => {
-    const result: Record<string, number> = Object.fromEntries(GENRES.map((genre) => [genre, 0]))
-
-    likedMovies.forEach((movie) => {
-      movie.genres.forEach((genre) => {
-        if (genre in result) result[genre] += 1
-      })
-    })
-
-    dislikedIds.forEach((id) => {
-      const movie = movieCatalog.find((entry) => entry.id === id)
-      movie?.genres.forEach((genre) => {
-        if (genre in result) result[genre] -= 0.5
-      })
-    })
-
-    return result
-  }, [dislikedIds, likedMovies])
-
-  const unseenRecommendations = useMemo(() => {
-    const unseen = movieCatalog.filter((movie) => !likedMovies.some((liked) => liked.id === movie.id) && !dislikedIds.includes(movie.id))
-    return getRecommendedTitles(unseen, selectedGenres, likedMovies, dislikedIds, 5)
-  }, [dislikedIds, likedMovies, selectedGenres])
-
-  const buildNextDiscoverBatch = () => {
-    const excludedIds = [...likedMovies.map((movie) => movie.id), ...dislikedIds]
-    const nextDeck = buildDeck(selectedGenres, 12, excludedIds)
-    setDeck(nextDeck)
-    setCurrentIndex(0)
-    setSwipesInBatch(0)
-    setShowInfo(false)
-    setTasteScreen(false)
-  }
-
-  const toggleGenre = (genre: string) => {
-    setSelectedGenres((current) => (current.includes(genre) ? current.filter((item) => item !== genre) : [...current, genre]))
-  }
-
-  const handleConfirmGenres = () => {
-    if (selectedGenres.length > 0) {
-      setOnboardingComplete(true)
-      setActiveTab('discover')
-    }
-  }
-
-  const handleLike = () => {
-    if (!currentMovie) return
-
-    setLikedMovies((current) => {
-      const alreadyLiked = current.some((movie) => movie.id === currentMovie.id)
-      return alreadyLiked ? current : [...current, currentMovie]
-    })
-
-    advanceDeck('like')
-  }
-
-  const handleDislike = () => {
-    if (!currentMovie) return
-    setDislikedIds((current) => (current.includes(currentMovie.id) ? current : [...current, currentMovie.id]))
-    advanceDeck('dislike')
-  }
-
-  const advanceDeck = (direction: 'like' | 'dislike') => {
-    if (direction === 'like') setLikedMovies((current) => (current.some((movie) => movie.id === currentMovie.id) ? current : [...current, currentMovie]))
-    if (direction === 'dislike') setDislikedIds((current) => (current.includes(currentMovie.id) ? current : [...current, currentMovie.id]))
-
-    const nextCount = swipesInBatch + 1
-    setSwipesInBatch(nextCount)
-    const nextIndex = currentIndex + 1
-
-    if (nextIndex >= deck.length || nextCount >= 10) {
-      setTasteScreen(true)
-      return
-    }
-
-    setCurrentIndex(nextIndex)
-    setShowInfo(false)
-  }
-
-  const currentSession = currentSessionCode ? sessions[currentSessionCode] : null
-  const currentParticipant = currentSession && currentParticipantId ? currentSession.participants[currentParticipantId] : undefined
-
-  const getSessionMatches = (session: SessionRecord | null) => {
-    const participantEntries = session ? Object.values(session.participants) : []
-    if (participantEntries.length < 2) return []
-
-    const sets = participantEntries.map((participant) => new Set(participant.likes))
-    const common = [...sets[0]].filter((id) => sets.every((set) => set.has(id)))
-    return common
-      .map((id) => movieCatalog.find((movie) => movie.id === id))
-      .filter((movie): movie is CatalogMovie => Boolean(movie))
-  }
-
-  const sessionMutualMatches = useMemo(() => getSessionMatches(currentSession), [currentSession])
-
-  const allMutualMatches = useMemo(() => {
-    const matchesById = new Map<string, CatalogMovie>()
-
-    Object.values(sessions).forEach((session) => {
-      const participants = Object.values(session.participants)
-      const currentUser = session.participants[currentParticipantId]
-      if (!currentUser || participants.length < 2 || participants.some((participant) => !participant.done)) return
-
-      getSessionMatches(session).forEach((movie) => matchesById.set(movie.id, movie))
-    })
-
-    return [...matchesById.values()]
-  }, [currentParticipantId, sessions])
-
-  const startSession = () => {
-    const name = sessionInputName.trim() || 'Guest'
-    const code = Math.random().toString(36).slice(2, 6).toUpperCase()
-    const participantId = `${name}-${Date.now()}`
-
-    const session: SessionRecord = {
-      code,
-      deck: buildDeck(selectedGenres.length ? selectedGenres : genrePriority, 10),
-      participants: {
-        [participantId]: {
-          id: participantId,
-          name,
-          likes: [],
-          dislikes: [],
-          done: false,
-          deckIndex: 0,
-        },
-      },
-    }
-
-    setSessions((current) => ({ ...current, [code]: session }))
-    setCurrentSessionCode(code)
-    setCurrentParticipantId(participantId)
-    setSessionScreen('swipe')
-    setActiveTab('sessions')
-  }
-
-  const joinSession = () => {
-    const code = joinCode.trim().toUpperCase()
-    const name = joinName.trim() || 'Guest'
-    const existing = sessions[code]
-    if (!existing) return
-
-    const participantId = `${name}-${Date.now()}`
-    const nextSession: SessionRecord = {
-      ...existing,
-      participants: {
-        ...existing.participants,
-        [participantId]: {
-          id: participantId,
-          name,
-          likes: [],
-          dislikes: [],
-          done: false,
-          deckIndex: 0,
-        },
-      },
-    }
-
-    setSessions((current) => ({ ...current, [code]: nextSession }))
-    setCurrentSessionCode(code)
-    setCurrentParticipantId(participantId)
-    setSessionScreen('swipe')
-    setActiveTab('sessions')
-  }
-
-  const updateCurrentSession = (nextSession: SessionRecord) => {
-    const storedSessions = getStored<Record<string, SessionRecord>>(storageKeys.sessions, {})
-    const storedSession = storedSessions[nextSession.code]
-    const mergedSession: SessionRecord = storedSession
-      ? {
-          ...storedSession,
-          deck: nextSession.deck,
-          participants: { ...storedSession.participants, ...nextSession.participants },
-        }
-      : nextSession
-    const mergedSessions = { ...storedSessions, [nextSession.code]: mergedSession }
-
-    localStorage.setItem(storageKeys.sessions, JSON.stringify(mergedSessions))
-    setSessions((current) => ({ ...current, [nextSession.code]: mergedSession }))
-    return mergedSession
-  }
-
-  const sessionCard = currentSession && currentParticipant ? currentSession.deck[currentParticipant.deckIndex] : null
-
-  const handleSessionSwipe = (direction: 'like' | 'dislike') => {
-    if (!currentSession || !currentParticipant) return
-
-    const card = currentSession.deck[currentParticipant.deckIndex]
-    if (!card) return
-
-    const nextParticipant: SessionParticipant = {
-      ...currentParticipant,
-      likes: direction === 'like' ? [...currentParticipant.likes, card.id] : currentParticipant.likes,
-      dislikes: direction === 'dislike' ? [...currentParticipant.dislikes, card.id] : currentParticipant.dislikes,
-      deckIndex: currentParticipant.deckIndex + 1,
-      done: currentParticipant.deckIndex + 1 >= currentSession.deck.length,
-    }
-
-    const nextSession: SessionRecord = {
-      ...currentSession,
-      participants: {
-        ...currentSession.participants,
-        [currentParticipantId]: nextParticipant,
-      },
-    }
-
-    const persistedSession = updateCurrentSession(nextSession)
-
-    const doneCount = Object.values(persistedSession.participants).filter((participant) => participant.done).length
-    setSessionScreen(doneCount >= 2 ? 'results' : 'waiting')
-  }
-
-  const resetAll = () => {
-    setHasStarted(false)
-    setSelectedGenres([])
-    setOnboardingComplete(false)
-    setLikedMovies([])
-    setDislikedIds([])
-    setDeck(buildDeck([], 12))
-    setCurrentIndex(0)
-    setTasteScreen(false)
-    setSwipesInBatch(0)
-    sessionStorage.removeItem(storageKeys.selectedGenres)
-    sessionStorage.removeItem(storageKeys.hasStarted)
-    sessionStorage.removeItem(storageKeys.onboardingComplete)
-    sessionStorage.removeItem(storageKeys.likedMovies)
-    sessionStorage.removeItem(storageKeys.dislikedIds)
-    sessionStorage.removeItem(storageKeys.currentSession)
-    sessionStorage.removeItem(storageKeys.currentParticipant)
-  }
-
-  const renderCover = () => (
-    <div className="phone-shell">
-      <div className="status-bar"><div className="status-icons"><span className="status-pill" /><span className="status-pill small" /><span className="status-pill tiny" /></div></div>
-      <div className="panel cover-panel">
-        <div className="cover-mark">FLIX</div>
-        <div className="cover-content">
-          <div className="eyebrow">YOUR NEXT FAVORITE MOVIE</div>
-          <h1>Swipe into something worth watching.</h1>
-          <p>Flix learns your taste as you swipe, builds a personal watchlist, and helps you find movies you and your friends will both love.</p>
-          <div className="cover-points">
-            <span><Sparkles size={16} /> Discover movies matched to your mood.</span>
-            <span><Heart size={16} /> Save the ones you want to remember.</span>
-            <span><Users size={16} /> Match with a friend for your next movie night.</span>
-          </div>
-        </div>
-        <button type="button" className="primary-button" onClick={() => setHasStarted(true)}>Get Started</button>
-      </div>
-    </div>
-  )
-
-  const renderDiscover = () => {
-    if (!onboardingComplete || selectedGenres.length === 0) {
-      return (
-        <div className="phone-shell">
-          <div className="status-bar"><div className="status-icons"><span className="status-pill" /><span className="status-pill small" /><span className="status-pill tiny" /></div></div>
-          <div className="panel onboarding-panel">
-            <div className="eyebrow">CURATE YOUR SLATE</div>
-            <h1>Choose your flavors.</h1>
-            <p>Select your core genres to train your swipe recommendations.</p>
-
-            <div className="genre-grid full-height-grid">
-              {GENRES.map((genre) => {
-                const selected = selectedGenres.includes(genre)
-                return (
-                  <button
-                    type="button"
-                    key={genre}
-                    onClick={() => toggleGenre(genre)}
-                    className={`genre-card ${selected ? 'selected' : ''}`}
-                    style={{ backgroundImage: `linear-gradient(180deg, rgba(12,12,16,0.18), rgba(8,8,12,0.8)), url(${genreMoodImages[genre]})` }}
-                  >
-                    <span>{genre}</span>
-                    {selected && <span className="check-badge"><Check size={12} /></span>}
-                  </button>
-                )
-              })}
-            </div>
-
-            <button type="button" className="primary-button" disabled={selectedGenres.length === 0} onClick={handleConfirmGenres}>
-              Confirm Choices
-            </button>
-            <div className="helper-text">You can tweak preferences anytime in Settings</div>
-          </div>
-        </div>
-      )
-    }
-
-    if (tasteScreen) {
-      return (
-        <div className="phone-shell">
-          <div className="status-bar"><div className="status-icons"><span className="status-pill" /><span className="status-pill small" /><span className="status-pill tiny" /></div></div>
-          <div className="panel taste-panel">
-            <div className="eyebrow">YOUR TASTE</div>
-            <h2>Your Taste</h2>
-            <div className="taste-breakdown">
-              {GENRES.map((genre) => (
-                <div key={genre} className="bar-row">
-                  <span>{genre}</span>
-                  <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.max(8, Math.min(100, ((affinityByGenre[genre] ?? 0) + 3) * 20))}%` }} /></div>
-                </div>
-              ))}
-            </div>
-
-            <div className="recommendation-list">
-              {unseenRecommendations.map((movie) => (
-                <div className="recommendation-row" key={movie.id}>
-                  <div className="recommendation-emoji" style={{ background: movie.gradient }}>{movie.emoji}</div>
-                  <div>
-                    <strong>{movie.title}</strong>
-                    <small>{movie.score} match</small>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <button type="button" className="primary-button" onClick={buildNextDiscoverBatch}>Keep Swiping</button>
-          </div>
-        </div>
-      )
-    }
-
-    return (
-      <div className="phone-shell">
-        <div className="status-bar"><div className="status-icons"><span className="status-pill" /><span className="status-pill small" /><span className="status-pill tiny" /></div></div>
-        <div className="panel discover-panel">
-          <div className="movie-card-wrap">
-            <AnimatePresence mode="wait">
-              {!showInfo && (
-                <motion.div
-                  key={currentMovie.id}
-                  className="movie-card"
-                  initial={{ opacity: 0.2, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.22 }}
-                  style={{ background: `${currentMovie.gradient}` }}
-                >
-                  <div className="movie-card-topline">
-                    <span className="rating-badge"><Star size={12} fill="currentColor" /> {currentMovie.genres.join(' • ')}</span>
-                    <span className="recommended-tag">RECOMMENDED</span>
-                  </div>
-                  <div className="movie-card-copy">
-                    <span className="hero-title">{currentMovie.emoji}</span>
-                    <span className="hero-title title-stack">{currentMovie.title}</span>
-                    <div className="movie-meta-link">{currentMovie.year}</div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <AnimatePresence>
-              {showInfo && (
-                <motion.div key={`${currentMovie.id}-info`} className="movie-card movie-card-info" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.96 }}>
-                  <div className="info-header">Overview</div>
-                  <h3>{currentMovie.title}</h3>
-                  <p>{currentMovie.description}</p>
-                  <div className="info-meta-row">
-                    <span>{currentMovie.genres.join(' • ')}</span>
-                    <span>{currentMovie.year}</span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <div className="swipe-actions">
-            <button type="button" className="action-btn nope-btn" onClick={handleDislike} aria-label="Dislike movie"><X size={30} /></button>
-            <button type="button" className="action-btn info-btn" onClick={() => setShowInfo((value) => !value)} aria-label="Toggle info"><Info size={18} /></button>
-            <button type="button" className="action-btn like-btn" onClick={handleLike} aria-label="Like movie"><Heart size={24} /></button>
-          </div>
-
-          <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-        </div>
-      </div>
-    )
-  }
-
-  const renderWatchlist = () => (
-    <div className="phone-shell">
-      <div className="status-bar"><div className="status-icons"><span className="status-pill" /></div></div>
-      <div className="panel watchlist-panel">
-        <h1>Watchlist</h1>
-        <div className="pill-count-box">{watchlistTab === 'solo' ? likedMovies.length : allMutualMatches.length} Saved</div>
-
-        <div className="segment-row">
-          <button type="button" className={`segment ${watchlistTab === 'solo' ? 'active' : ''}`} onClick={() => setWatchlistTab('solo')}>Solo Likes</button>
-          <button type="button" className={`segment ${watchlistTab === 'mutual' ? 'active' : ''}`} onClick={() => setWatchlistTab('mutual')}>Mutual Matches</button>
-        </div>
-
-        <div className="watchlist-list">
-          {watchlistTab === 'solo' ? (
-            likedMovies.length === 0 ? (
-              <div className="empty-state">No movies saved yet.</div>
-            ) : (
-              likedMovies.map((movie) => (
-                <div className="watchlist-item" key={movie.id}>
-                  <div className="watchlist-art" style={{ background: movie.gradient }}>{movie.emoji}</div>
-                  <div>
-                    <div className="watchlist-title">{movie.title}</div>
-                    <div className="watchlist-meta">{movie.year} • {movie.genres.join(' • ')}</div>
-                  </div>
-                </div>
-              ))
-            )
-          ) : (
-            allMutualMatches.length === 0 ? (
-              <div className="empty-state">No mutual matches yet.</div>
-            ) : (
-              allMutualMatches.map((movie) => (
-                <div className="watchlist-item" key={movie.id}>
-                  <div className="watchlist-art" style={{ background: movie.gradient }}>{movie.emoji}</div>
-                  <div>
-                    <div className="watchlist-title">{movie.title}</div>
-                    <div className="watchlist-meta">{movie.year} • {movie.genres.join(' • ')}</div>
-                  </div>
-                </div>
-              ))
-            )
-          )}
-        </div>
+  return (
+    <div className="flick-site">
+      <div className="built-on-bar">
+        <span>Built on</span>
+        <strong>Wix Studio</strong>
       </div>
 
-      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-    </div>
-  )
-
-  const renderSessionsHome = () => (
-    <div className="phone-shell">
-      <div className="status-bar"><div className="status-icons"><span className="status-pill" /></div></div>
-      <div className="panel sessions-panel">
-        <h1>Sessions</h1>
-        <p>You and your friend swipe the exact same 10 movies separately. We’ll show you what you both liked!</p>
-
-        <div className="session-form">
-          <label>
-            <span>Your name</span>
-            <input value={sessionInputName} onChange={(event) => setSessionInputName(event.target.value)} placeholder="e.g. Sam" />
-          </label>
-          <button type="button" className="primary-button" onClick={startSession}>Start a new session</button>
+      <header className="site-header">
+        <div className="brand-lockup">
+          <img src="https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=200&q=80" alt="Flick logo" />
+          <span>Flick</span>
         </div>
 
-        <div className="divider">or</div>
+        <nav className="site-nav" aria-label="Main navigation">
+          <button type="button" className="menu-button">Menu</button>
+        </nav>
 
-        <div className="session-form">
-          <label>
-            <span>Session code</span>
-            <input value={joinCode} onChange={(event) => setJoinCode(event.target.value)} placeholder="E.G. F3QX" />
-          </label>
-          <label>
-            <span>Your name</span>
-            <input value={joinName} onChange={(event) => setJoinName(event.target.value)} placeholder="e.g. Alex" />
-          </label>
-          <button type="button" className="secondary-button" onClick={joinSession}>Join a session</button>
-        </div>
-      </div>
+        <a className="header-cta" href="https://jcdavidson6.github.io/Flick/" target="_blank" rel="noreferrer">
+          Start Today
+        </a>
+      </header>
 
-      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-    </div>
-  )
+      <main className="page-shell">
+        <section className="hero-section">
+          <div className="hero-video">
+            <button type="button" className="video-button">Play video</button>
+          </div>
 
-  const renderSessionsSwipe = () => {
-    if (!currentSession || !currentParticipant) return renderSessionsHome()
+          <div className="hero-copy">
+            <h1>Swipe into Something Worth Watching</h1>
+            <p>A personalized app for your next watch</p>
+            <a className="primary-link" href="https://jcdavidson6.github.io/Flick/" target="_blank" rel="noreferrer">
+              Start Today
+            </a>
+          </div>
+        </section>
 
-    const doneCount = Object.values(currentSession.participants).filter((participant) => participant.done).length
-
-    if (doneCount >= 2) {
-      const mutualIds = sessionMutualMatches.map((movie) => movie.id)
-      const heroMovie = sessionMutualMatches[0] ?? currentSession.deck[0]
-
-      return (
-        <div className="phone-shell">
-          <div className="status-bar"><div className="status-icons"><span className="status-pill" /></div></div>
-          <div className="panel sessions-results-panel">
-            <div className="eyebrow">MATCH RESULTS</div>
-            <h2>{mutualIds.length ? 'You both matched!' : 'No exact overlap — here is what fits you both'}</h2>
-            {heroMovie && (
-              <div className="hero-match-card" style={{ background: heroMovie.gradient }}>
-                <div className="hero-match-backdrop" />
-                <div className="hero-match-content">
-                  <span className="match-emoji">{heroMovie.emoji}</span>
-                  <strong>{heroMovie.title}</strong>
-                  <small>{heroMovie.year}</small>
-                </div>
-              </div>
-            )}
-
-            <div className="results-list">
-              {(mutualIds.length ? sessionMutualMatches : currentSession.deck.slice(0, 4)).map((movie) => (
-                <div key={movie.id} className="result-row">
-                  <div className="watchlist-art" style={{ background: movie.gradient }}>{movie.emoji}</div>
-                  <div>
-                    <div className="watchlist-title">{movie.title}</div>
-                    <div className="watchlist-meta">{movie.year} • {movie.genres.join(' • ')}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="session-actions">
-              <button type="button" className="primary-button" onClick={() => { setSessionScreen('home'); setActiveTab('discover') }}>Keep Swiping</button>
-              <button type="button" className="secondary-button" onClick={() => { setSessionScreen('home'); setCurrentSessionCode(null); setActiveTab('sessions') }}>Return to Menu</button>
+        <section className="info-section">
+          <div className="info-copy">
+            <h2>Why Flix will simplify your life</h2>
+            <div className="quote-block">
+              <p>“Every group hangout has the same five minutes of dead air: “What do you want to watch?” “I don’t know, what do you want to watch?””</p>
+              <p>
+                Existing tools solve half the problem - a watchlist app remembers what you wanted to see, and a ratings app tells you what’s good - but nothing helps two or more people actually converge on one answer in the moment.
+              </p>
+              <p>
+                “Flick treats movie discovery as a taste-matching problem, not a search problem: swipe on movies the way you’d swipe on a dating profile, build a taste graph from the pattern, and when you’re watching with someone else, swipe the same deck and surface exactly where you overlap.”
+              </p>
             </div>
           </div>
-        </div>
-      )
-    }
+          <div className="info-visual" aria-label="Feature illustration" />
+        </section>
 
-    if (!sessionCard) {
-      return (
-        <div className="phone-shell">
-          <div className="status-bar"><div className="status-icons"><span className="status-pill" /></div></div>
-          <div className="panel sessions-panel">
-            <div className="eyebrow">WAITING ROOM</div>
-            <h1>Session {currentSession.code}</h1>
-            <p>Share this code while your partner finishes swiping.</p>
-            <div className="session-code">{currentSession.code}</div>
-            <div className="participants-list">
-              {Object.values(currentSession.participants).map((participant) => (
-                <div key={participant.id} className="participant-row">
-                  <span>{participant.name}</span>
-                  <span>{participant.done ? '✓ done' : '… waiting'}</span>
-                </div>
-              ))}
-            </div>
+        <section className="app-feature section-block">
+          <div className="section-heading-row">
+            <h2>Explore the App</h2>
           </div>
-        </div>
-      )
-    }
 
-    return (
-      <div className="phone-shell">
-        <div className="status-bar"><div className="status-icons"><span className="status-pill" /></div></div>
-        <div className="panel sessions-panel">
-          <div className="session-code-banner">Code: <strong>{currentSession.code}</strong></div>
-          <h1>Session {currentSession.code}</h1>
-          <div className="participants-list">
-            {Object.values(currentSession.participants).map((participant) => (
-              <div key={participant.id} className="participant-row">
-                <span>{participant.name}</span>
-                <span>{participant.done ? '✓ done' : '… waiting'}</span>
-              </div>
+          <ul className="feature-list">
+            {featureList.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="pages-section section-block">
+          <div className="section-toolbar">
+            <div>
+              <h2>Explore Our Pages</h2>
+              <p>A curated “For You” page we think you will love</p>
+            </div>
+            <a className="secondary-link" href="https://jcdavidson6.github.io/Flick/" target="_blank" rel="noreferrer">
+              Start Now
+            </a>
+          </div>
+
+          <div className="gallery-grid">
+            {galleryImages.map((image, index) => (
+              <div key={image + index} className="gallery-card" style={{ backgroundImage: `url(${image})` }} />
             ))}
           </div>
+        </section>
 
-          <div className="movie-card-wrap compact-wrap">
-            <div className="movie-card" style={{ background: sessionCard.gradient }}>
-              <div className="movie-card-topline">
-                <span className="rating-badge"><Star size={12} fill="currentColor" /> {sessionCard.genres.join(' • ')}</span>
-                <span className="recommended-tag">SESSION</span>
-              </div>
-              <div className="movie-card-copy">
-                <span className="hero-title">{sessionCard.emoji}</span>
-                <span className="hero-title title-stack">{sessionCard.title}</span>
-                <div className="movie-meta-link">{sessionCard.year}</div>
-              </div>
-            </div>
+        <section className="testimonials section-block">
+          <div className="testimonials-header">
+            <img src="https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=600&q=80" alt="People using Flick" />
+            <h2>Hear What Our Community Has to Say</h2>
           </div>
 
-          <div className="swipe-actions compact-actions">
-            <button type="button" className="action-btn nope-btn" onClick={() => handleSessionSwipe('dislike')}><X size={30} /></button>
-            <button type="button" className="action-btn info-btn" onClick={() => {}}><Info size={18} /></button>
-            <button type="button" className="action-btn like-btn" onClick={() => handleSessionSwipe('like')}><Heart size={24} /></button>
+          <div className="testimonial-list">
+            {testimonials.map((item) => (
+              <article key={item.author} className="testimonial-item">
+                <div className="quote-mark" aria-hidden="true">“</div>
+                <blockquote>{item.quote}</blockquote>
+                <div className="person-row">
+                  <img src={item.avatar} alt={item.author} />
+                  <div>
+                    <strong>{item.author}</strong>
+                    <div className="stars" aria-label="five star rating">
+                      <span>★</span>
+                      <span>★</span>
+                      <span>★</span>
+                      <span>★</span>
+                      <span>★</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
-        </div>
-      </div>
-    )
-  }
+        </section>
 
-  const renderProfile = () => (
-    <div className="phone-shell">
-      <div className="status-bar"><div className="status-icons"><span className="status-pill" /></div></div>
-      <div className="panel profile-panel">
-        <h1>Flavor Profile</h1>
+        <section className="newsletter section-block">
+          <div className="newsletter-header">
+            <h2>Keep up With Our Latest Updates</h2>
+          </div>
 
-        <div className="genre-grid full-height-grid profile-grid">
-          {GENRES.map((genre) => {
-            const selected = selectedGenres.includes(genre)
-            return (
-              <button
-                type="button"
-                key={genre}
-                onClick={() => toggleGenre(genre)}
-                className={`genre-card ${selected ? 'selected' : ''}`}
-                style={{ backgroundImage: `linear-gradient(180deg, rgba(10,10,12,0.18), rgba(0,0,0,0.8)), url(${genreMoodImages[genre]})` }}
-              >
-                <span>{genre}</span>
-                {selected && <span className="check-badge"><Check size={12} /></span>}
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="taste-breakdown">
-          {GENRES.map((genre) => (
-            <div key={genre} className="bar-row">
-              <span>{genre}</span>
-              <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.max(10, Math.min(100, ((affinityByGenre[genre] ?? 0) + 3) * 22))}%` }} /></div>
+          <form className="newsletter-form">
+            <div className="input-group">
+              <label htmlFor="email">Your Email</label>
+              <div className="email-row">
+                <input id="email" type="email" placeholder="Your Email" />
+                <button type="submit">Submit</button>
+              </div>
+              <label className="checkbox-row">
+                <input type="checkbox" defaultChecked />
+                <span>Yes, Subscribe me to your newsletter</span>
+              </label>
             </div>
-          ))}
+          </form>
+        </section>
+      </main>
+
+      <footer className="site-footer">
+        <div className="footer-brand">
+          <img src="https://images.unsplash.com/photo-1516280440614-37939bbacd81?auto=format&fit=crop&w=200&q=80" alt="Flick brand" />
+          <span>Flick</span>
         </div>
 
-        <button type="button" className="reset-btn" onClick={resetAll}>Reset all data</button>
-      </div>
-      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
-    </div>
-  )
-
-  const renderSessions = () => {
-    if (sessionScreen === 'swipe' || sessionScreen === 'waiting' || sessionScreen === 'results') return renderSessionsSwipe()
-    return renderSessionsHome()
-  }
-
-  const renderMain = () => {
-    if (!hasStarted) return renderCover()
-    if (activeTab === 'watchlist') return renderWatchlist()
-    if (activeTab === 'sessions') return renderSessions()
-    if (activeTab === 'profile') return renderProfile()
-    return renderDiscover()
-  }
-
-  return (
-    <div className="app-shell">
-      <div className="app-stage">{renderMain()}</div>
-      <div className="tmdb-branding">TMDB</div>
-    </div>
-  )
-}
-
-function BottomNav({ activeTab, setActiveTab }: { activeTab: Tab; setActiveTab: Dispatch<SetStateAction<Tab>> }) {
-  const tabs = [
-    { id: 'discover', label: 'Discover', icon: Sparkles },
-    { id: 'watchlist', label: 'Watchlist', icon: Bookmark },
-    { id: 'sessions', label: 'Sessions', icon: Users },
-    { id: 'profile', label: 'Profile', icon: UserRound },
-  ] as const
-
-  return (
-    <div className="bottom-nav">
-      {tabs.map(({ id, label, icon: Icon }) => (
-        <button type="button" key={id} className={`nav-item ${activeTab === id ? 'active' : ''}`} onClick={() => setActiveTab(id)}>
-          <Icon size={18} />
-          <span>{label}</span>
-        </button>
-      ))}
+        <div className="footer-links">
+          <a href="https://jamesdportfolio.wixstudio.com/flick">Home</a>
+          <a href="https://jcdavidson6.github.io/Flick/" target="_blank" rel="noreferrer">Start Now</a>
+        </div>
+      </footer>
     </div>
   )
 }
