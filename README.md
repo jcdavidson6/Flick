@@ -42,6 +42,13 @@ npm run dev
 
 Open the local URL printed by Vite, usually `http://localhost:5173`.
 
+### GitHub Pages
+
+The deployed app is available at [`https://jcdavidson6.github.io/Flix/`](https://jcdavidson6.github.io/Flix/).
+Because this is a project site, the `/Flix/` path is required; `https://jcdavidson6.github.io/` is not the app URL.
+
+Each push to `main` deploys through the **Deploy to GitHub Pages** workflow. Allow the workflow to finish before opening the site.
+
 ### Production build
 
 ```bash
