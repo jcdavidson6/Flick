@@ -57,7 +57,7 @@ function App() {
           <button type="button" className="menu-button">Menu</button>
         </nav>
 
-        <a className="header-cta" href="https://jcdavidson6.github.io/Flick/" target="_blank" rel="noreferrer">
+        <a className="header-cta" href="https://jcdavidson6.github.io/Flix/" target="_blank" rel="noreferrer">
           Start Today
         </a>
       </header>
@@ -71,7 +71,7 @@ function App() {
           <div className="hero-copy">
             <h1>Swipe into Something Worth Watching</h1>
             <p>A personalized app for your next watch</p>
-            <a className="primary-link" href="https://jcdavidson6.github.io/Flick/" target="_blank" rel="noreferrer">
+            <a className="primary-link" href="https://jcdavidson6.github.io/Flix/" target="_blank" rel="noreferrer">
               Start Today
             </a>
           </div>
@@ -111,7 +111,7 @@ function App() {
               <h2>Explore Our Pages</h2>
               <p>A curated “For You” page we think you will love</p>
             </div>
-            <a className="secondary-link" href="https://jcdavidson6.github.io/Flick/" target="_blank" rel="noreferrer">
+            <a className="secondary-link" href="https://jcdavidson6.github.io/Flix/" target="_blank" rel="noreferrer">
               Start Now
             </a>
           </div>
@@ -181,7 +181,7 @@ function App() {
 
         <div className="footer-links">
           <a href="https://jamesdportfolio.wixstudio.com/flick">Home</a>
-          <a href="https://jcdavidson6.github.io/Flick/" target="_blank" rel="noreferrer">Start Now</a>
+          <a href="https://jcdavidson6.github.io/Flix/" target="_blank" rel="noreferrer">Start Now</a>
         </div>
       </footer>
     </div>
